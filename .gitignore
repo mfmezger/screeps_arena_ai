@@ -1,0 +1,10 @@
+node_modules/
+dist/
+
+# Screeps Arena client-generated local typings/starter files
+typings/
+jsconfig.json
+main.mjs
+
+*.log
+.DS_Store

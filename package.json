@@ -1,0 +1,18 @@
+{
+  "name": "screeps-arena-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Screeps Arena bots, starting with Season 2 Capture the Flag.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && npm run build:ctf",
+    "build:ctf": "esbuild src/arena_capture_the_flag/main.ts --bundle --format=esm --target=es2020 --outfile=dist/arena_capture_the_flag/main.mjs --external:game --external:game/* --external:arena --external:arena/*",
+    "watch:ctf": "esbuild src/arena_capture_the_flag/main.ts --bundle --format=esm --target=es2020 --outfile=dist/arena_capture_the_flag/main.mjs --external:game --external:game/* --external:arena --external:arena/* --watch"
+  },
+  "devDependencies": {
+    "@screeps-arena-community/types": "^1.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.0"
+  }
+}
