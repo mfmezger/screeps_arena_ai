@@ -35,7 +35,7 @@ import { createConstructionSite, findPath, getObjects, getObjectsByPrototype, ge
 const TELEMETRY_ENABLED = true
 const TELEMETRY_INTERVAL = 10
 const DEBUG_TELEMETRY_INTERVAL = 25
-const DEFENSE_RANGE = 18
+const DEFENSE_RANGE = 30
 const RANGED_KEEPAWAY_RANGE = 2
 const EXTENSION_TARGET = 8
 const MAX_WORKERS = 0
@@ -44,7 +44,7 @@ const ATTACK_GROUP_MIN = 8
 const FLAG_RUNNER_COUNT = 3
 const HEALER_FIGHTER_RATIO = 4
 const SQUAD_SIZE = 4
-const SQUAD_RALLY_UNTIL = 90
+const SQUAD_RALLY_UNTIL = 60
 const SQUAD_FOLLOW_RANGE = 3
 const SQUAD_CATCHUP_RANGE = 6
 const SQUAD_RALLY_RANGE = 1
@@ -179,7 +179,9 @@ function spawnCreeps(state: ArenaState): void {
   const fighterBody =
     fighters.length < FLAG_RUNNER_COUNT
       ? lightRangedBody(energy)
-      : heavyRangedBody(energy) ?? (meleeFighters.length * SQUAD_SIZE < mainFighters.length + 1 ? meleeBody(energy) : rangedBody(energy))
+      : meleeFighters.length * SQUAD_SIZE < mainFighters.length + 1
+        ? meleeBody(energy)
+        : rangedBody(energy)
 
   if (workers.length < MIN_WORKERS) {
     spawnBody(spawn, workerBody(energy))
@@ -520,8 +522,15 @@ function chooseSquadTarget(leader: Position, state: ArenaState): Position | unde
     return wall
   }
 
-  const nearbyEnemy = combatTarget(state.enemyCreeps.filter((enemy) => getRange(leader, enemy) <= 6))
-  return nearbyEnemy ?? state.enemySpawn ?? combatTarget(state.enemyCreeps)
+  if (state.mySpawn) {
+    const baseThreat = combatTarget(state.enemyCreeps.filter((enemy) => getRange(state.mySpawn!, enemy) <= DEFENSE_RANGE))
+    if (baseThreat) {
+      return baseThreat
+    }
+  }
+
+  const dangerousEnemy = combatTarget(state.enemyCreeps.filter((enemy) => getRange(leader, enemy) <= 4 || isDangerousEnemy(enemy)))
+  return dangerousEnemy ?? state.enemySpawn ?? combatTarget(state.enemyCreeps)
 }
 
 function blockingWallTarget(origin: Position, state: ArenaState): StructureWall | undefined {
@@ -602,50 +611,13 @@ function lightRangedBody(energy: number): BodyPartType[] {
   return bodyCost([MOVE, RANGED_ATTACK, MOVE]) <= energy ? [MOVE, RANGED_ATTACK, MOVE] : []
 }
 
-function heavyRangedBody(energy: number): BodyPartType[] | undefined {
-  const body: BodyPartType[] = [
-    MOVE,
-    MOVE,
-    MOVE,
-    MOVE,
-    MOVE,
-    MOVE,
-    MOVE,
-    MOVE,
-    MOVE,
-    MOVE,
-    MOVE,
-    MOVE,
-    MOVE,
-    MOVE,
-    MOVE,
-    RANGED_ATTACK,
-    RANGED_ATTACK,
-    RANGED_ATTACK,
-    RANGED_ATTACK,
-    RANGED_ATTACK,
-    RANGED_ATTACK,
-    RANGED_ATTACK,
-    RANGED_ATTACK,
-    RANGED_ATTACK,
-    RANGED_ATTACK,
-    HEAL,
-    HEAL,
-    HEAL,
-    HEAL,
-    HEAL,
-  ]
-
-  return bodyCost(body) <= energy ? body : undefined
-}
-
 function meleeBody(energy: number): BodyPartType[] {
-  const body: BodyPartType[] = [TOUGH, TOUGH, TOUGH, MOVE, ATTACK, MOVE, ATTACK, MOVE]
+  const body: BodyPartType[] = [MOVE, MOVE, MOVE, MOVE, MOVE, ATTACK, ATTACK, ATTACK]
   return bodyCost(body) <= energy ? body : [TOUGH, MOVE, ATTACK, MOVE]
 }
 
 function rangedBody(energy: number): BodyPartType[] {
-  const body: BodyPartType[] = [TOUGH, MOVE, RANGED_ATTACK, MOVE, RANGED_ATTACK, MOVE]
+  const body: BodyPartType[] = [TOUGH, MOVE, MOVE, MOVE, MOVE, MOVE, RANGED_ATTACK, RANGED_ATTACK, RANGED_ATTACK, HEAL]
   return bodyCost(body) <= energy ? body : lightRangedBody(energy)
 }
 
@@ -699,11 +671,14 @@ function combatTarget<T extends Creep>(creeps: T[]): T | undefined {
 }
 
 function targetPriority(creep: Creep): number {
+  if (isDangerousEnemy(creep)) {
+    return 6
+  }
   if (hasLivePart(creep, HEAL)) {
-    return 4
+    return 5
   }
   if (hasLivePart(creep, RANGED_ATTACK)) {
-    return 3
+    return 4
   }
   if (hasLivePart(creep, ATTACK)) {
     return 2
@@ -712,6 +687,14 @@ function targetPriority(creep: Creep): number {
     return 1
   }
   return 0
+}
+
+function isDangerousEnemy(creep: Creep): boolean {
+  return creep.hitsMax >= 600 || livePartCount(creep, ATTACK) >= 3 || livePartCount(creep, RANGED_ATTACK) >= 3
+}
+
+function livePartCount(creep: Creep, type: BodyPartType): number {
+  return creep.body.filter((part) => part.type === type && part.hits > 0).length
 }
 
 function lowestHits<T extends { hits?: number; hitsMax?: number }>(objects: T[]): T | undefined {
